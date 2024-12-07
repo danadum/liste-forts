@@ -22,7 +22,7 @@ class Interface(Tk):
         self.fichier = StringVar()
         self.intervalle = IntVar()
         self.serveurs = {}
-        self.royaumes = {"Glaces": 2, "Sables": 1, "Pics": 3}
+        self.royaumes = {"Iles": 4}
         self.remember = BooleanVar()
         self.socket = None
         self.scan_state = StringVar()
@@ -34,14 +34,14 @@ class Interface(Tk):
                 self.nom.set(data.get("nom") or "")
                 self.mdp.set(data.get("mdp") or "")
                 self.serveur.set(data.get("serveur") or "France 1")
-                self.royaume.set(data.get("royaume") or "Glaces")
+                self.royaume.set(data.get("royaume") or "Iles")
                 self.dossier.set(data.get("dossier") or "")
-                self.fichier.set(data.get("fichier") or "forteresses.xlsx")
+                self.fichier.set(data.get("fichier") or "forts.xlsx")
                 self.intervalle.set(data.get("intervalle") or 10)
         else:
             self.serveur.set("France 1")
-            self.royaume.set("Glaces")
-            self.fichier.set("forteresses.xlsx")
+            self.royaume.set("Iles")
+            self.fichier.set("forts.xlsx")
             self.intervalle.set(10)
 
         self.minsize(400, 400)

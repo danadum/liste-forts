@@ -5,6 +5,17 @@ import json
 import pandas as pd
 from datetime import datetime, timedelta
 
+forts = {
+    7: {"level": 60, "defense": False},
+    8: {"level": 70, "defense": False},
+    9: {"level": 80, "defense": False},
+    10: {"level": 40, "defense": True},
+    11: {"level": 50, "defense": True},
+    12: {"level": 60, "defense": True},
+    13: {"level": 70, "defense": True},
+    14: {"level": 80, "defense": True}
+}
+
 
 class MySocket(websocket.WebSocketApp):
     def __init__(self, window, url, serveur_header, royaume, nom, mdp, filepath, intervalle):
@@ -16,7 +27,8 @@ class MySocket(websocket.WebSocketApp):
         self.mdp = mdp
         self.filepath = filepath
         self.intervalle = intervalle
-        self.fortos = []
+        self.forts = []
+        self.iles = []
         self.next_scan = ""
         self.last_x = -1
         self.last_y = -1
@@ -69,22 +81,40 @@ class MySocket(websocket.WebSocketApp):
         self.nb_fail = 0
         try:
             with pd.ExcelWriter(self.filepath, engine="openpyxl", datetime_format="dd/mm/yyyy hh:mm:ss", date_format="dd/mm/yyyy") as writer:
-                df = pd.DataFrame(self.fortos, columns=["Coord X", "Coord Y", "Heure de vérification", "Temps Restant"])
+                df = pd.DataFrame(self.forts, columns=["Coord X", "Coord Y", "Niveau", "Défendu", "Attaques restantes", "Heure de vérification", "Temps Restant"])
+                df.loc[df["Temps Restant"] > timedelta(0), "Attaques restantes"] = 0
                 df["Heure de disponibilité"] = df["Heure de vérification"] + df["Temps Restant"]
-                "Heure de vérification"
-                "Heure de disponibilité"
-                df.sort_values("Heure de disponibilité", inplace=True)
-                df.to_excel(writer, sheet_name="Sheet1", index=False, freeze_panes=(1, 0))
-                worksheet = writer.sheets["Sheet1"]
-                for cell in worksheet["C"]:
+                df.sort_values(by=["Temps Restant", "Niveau", "Défendu"], ascending=[True, False, True], inplace=True)
+                df.to_excel(writer, sheet_name="Forts", index=False, freeze_panes=(1, 0))
+                worksheet = writer.sheets["Forts"]
+                for cell in worksheet["F"]:
                     cell.number_format = "dd/mm/yyyy hh:mm:ss"
-                for cell in worksheet["D"]:
+                for cell in worksheet["G"]:
                     cell.number_format = "hh:mm:ss"
+                for cell in worksheet["H"]:
+                    cell.number_format = "dd/mm/yyyy hh:mm:ss"
+                worksheet.column_dimensions["E"].width = 14
+                worksheet.column_dimensions["F"].width = 20
+                worksheet.column_dimensions["G"].width = 14
+                worksheet.column_dimensions["H"].width = 20
+
+                df = pd.DataFrame(self.iles, columns=["Coord X", "Coord Y", "Type", "Libre", "Heure de vérification", "Temps Restant"])
+                df.loc[(df["Temps Restant"] > timedelta(0)) & (df["Libre"] == False) & (df["Type"] == "grande"), "Temps Restant"] += timedelta(hours=72)
+                df.loc[(df["Temps Restant"] > timedelta(0)) & (df["Libre"] == False) & (df["Type"] == "petite"), "Temps Restant"] += timedelta(hours=36)
+                df["Heure de disponibilité"] = df["Heure de vérification"] + df["Temps Restant"]
+                df.sort_values(by=["Temps Restant", "Type"], ascending=[True, True], inplace=True)
+                df.to_excel(writer, sheet_name="Iles", index=False, freeze_panes=(1, 0))
+                worksheet = writer.sheets["Iles"]
                 for cell in worksheet["E"]:
                     cell.number_format = "dd/mm/yyyy hh:mm:ss"
-                worksheet.column_dimensions["C"].width = 20
-                worksheet.column_dimensions["D"].width = 14
+                for cell in worksheet["F"]:
+                    cell.number_format = "[h]:mm:ss"
+                for cell in worksheet["G"]:
+                    cell.number_format = "dd/mm/yyyy hh:mm:ss"
                 worksheet.column_dimensions["E"].width = 20
+                worksheet.column_dimensions["F"].width = 14
+                worksheet.column_dimensions["G"].width = 20
+
             self.window.scan_state.set(f"Fichier Excel mis à jour à {datetime.now().strftime('%H:%M:%S')}. Prochain scan à {self.next_scan}.")
         except PermissionError:
             self.window.show_error(f"Impossible d'ouvrir le fichier Excel. Vérifiez qu'il n'est pas déjà ouvert par un autre programme puis réessayez.\n\nEmplacement du fichier :\n{self.filepath}")
@@ -99,8 +129,10 @@ class MySocket(websocket.WebSocketApp):
         elif message[:12] == "%xt%gaa%1%0%":
             data = json.loads(message[12:-1])
             for castle in data["AI"]:
-                if castle[0] == 11:
-                    self.fortos.append([castle[1], castle[2], datetime.now(), timedelta(seconds=castle[5])])
+                if castle[0] == 25:
+                    self.forts.append([castle[1], castle[2], forts[castle[5]]["level"], forts[castle[5]]["defense"], 10 - castle[7], datetime.now(), timedelta(seconds=castle[8])])
+                elif castle[0] == 24 and castle[8] in [3, 6]:
+                    self.iles.append([castle[1], castle[2], "grande" if castle[8] == 3 else "petite", castle[4] == -403, datetime.now(), timedelta(seconds=castle[9])])
             if data["AI"][0][2] // 13 == 98:
                 self.window.scan_state.set(f"""Scan de la carte en cours : {data["AI"][0][1] // 13 + 1}%""")
                 if data["AI"][0][1] // 13 == 98:
